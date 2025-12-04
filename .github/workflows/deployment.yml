@@ -1,0 +1,73 @@
+name: Backend Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "22.x"
+
+      - name: Build NestJS project
+        id: build
+        run: |
+          set -e
+          npm install
+          npm install -g @nestjs/cli
+          npm run build
+          tar -czf build.tar.gz dist package.json package-lock.json ecosystem.config.cjs
+
+      - name: Install sshpass
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Setup SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload build to Azure VM
+        run: |
+          sshpass -p '${{ secrets.SSH_PASSWORD }}' scp -o StrictHostKeyChecking=no build.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.PROJECT_DIR }}
+
+      - name: Deploy on Azure VM
+        id: deploy
+        run: |
+          set -e
+          sshpass -p '${{ secrets.SSH_PASSWORD }}' ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          cd ${{ secrets.PROJECT_DIR }}
+
+          # Create .env file with environment variables
+          cat > .env << 'ENV_EOF'
+          PORT=${{ secrets.PORT }}
+          NODE_ENV=production
+
+          # Database
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_PORT=${{ secrets.DB_PORT }}
+          DB_USERNAME=${{ secrets.DB_USERNAME }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_SSL=${{ secrets.DB_SSL }}
+
+          PDF_STORAGE_PATH=${{ secrets.PDF_STORAGE_PATH }}
+
+          ENV_EOF
+
+
+          tar -xzf build.tar.gz
+          npm install --production
+          npx pm2 reload ecosystem.config.cjs --env production
+          rm build.tar.gz
+          EOF
