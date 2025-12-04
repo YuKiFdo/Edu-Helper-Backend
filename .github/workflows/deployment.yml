@@ -37,19 +37,9 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload build to Azure VM
+      - name: Create .env file
         run: |
-          sshpass -p '${{ secrets.SSH_PASSWORD }}' scp -o StrictHostKeyChecking=no build.tar.gz ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.PROJECT_DIR }}
-
-      - name: Deploy on Azure VM
-        id: deploy
-        run: |
-          set -e
-          sshpass -p '${{ secrets.SSH_PASSWORD }}' ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-          cd ${{ secrets.PROJECT_DIR }}
-
-          # Create .env file with environment variables
-          cat > .env << 'ENV_EOF'
+          cat > .env << EOF
           PORT=${{ secrets.PORT }}
           NODE_ENV=production
 
@@ -62,9 +52,18 @@ jobs:
           DB_SSL=${{ secrets.DB_SSL }}
 
           PDF_STORAGE_PATH=${{ secrets.PDF_STORAGE_PATH }}
+          EOF
 
-          ENV_EOF
+      - name: Upload build and .env to Azure VM
+        run: |
+          sshpass -p '${{ secrets.SSH_PASSWORD }}' scp -o StrictHostKeyChecking=no build.tar.gz .env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.PROJECT_DIR }}
 
+      - name: Deploy on Azure VM
+        id: deploy
+        run: |
+          set -e
+          sshpass -p '${{ secrets.SSH_PASSWORD }}' ssh -o StrictHostKeyChecking=no ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << EOF
+          cd ${{ secrets.PROJECT_DIR }}
 
           tar -xzf build.tar.gz
           npm install --production
