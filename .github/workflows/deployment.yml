@@ -48,8 +48,9 @@ jobs:
           DB_PORT=${{ secrets.DB_PORT }}
           DB_USERNAME=${{ secrets.DB_USERNAME }}
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-          DB_NAME=${{ secrets.DB_NAME }}
+          DB_NAME=${{ secrets.DB_DATABASE }}
           DB_SSL=${{ secrets.DB_SSL }}
+          DB_SYNC=true
 
           PDF_STORAGE_PATH=${{ secrets.PDF_STORAGE_PATH }}
           EOF

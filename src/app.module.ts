@@ -26,7 +26,7 @@ import { DatabaseService } from './database/database.service';
           password: configService.get<string>('DB_PASSWORD', 'postgres'),
           database: configService.get<string>('DB_NAME', 'edu_helper'),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
-          synchronize: configService.get<string>('NODE_ENV') !== 'production', // Auto-create tables in dev
+          synchronize: configService.get<string>('DB_SYNC', 'true') === 'true', // Auto-create/update tables
           logging: configService.get<string>('NODE_ENV') === 'development',
           retryAttempts: 3,
           retryDelay: 3000,
