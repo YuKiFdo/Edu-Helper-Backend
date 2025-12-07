@@ -62,68 +62,16 @@ export const GRADE_MAPPING: Record<string, string> = {
   'ol': 'ordinary-level',
 };
 
-export const SUBJECT_MAPPING: Record<string, string> = {
-  'mathematics': 'mathematics',
-  'maths': 'mathematics',
-  'math': 'mathematics',
-  
-  'science': 'science',
-  
-  'english': 'english',
-  'english-language': 'english',
-  'english-language-arts': 'english',
-  
-  'sinhala': 'sinhala',
-  'tamil': 'tamil',
-  'history': 'history',
-  'geography': 'geography',
-  'civics': 'civics',
-  'citizenship-education': 'civics',
-  
-  'information-technology': 'information-technology',
-  'it': 'information-technology',
-  'ict': 'information-technology',
-  'computer-science': 'information-technology',
-  
-  'art': 'art',
-  'arts': 'art',
-  'art-and-design': 'art',
-  
-  'music': 'music',
-  'physical-education': 'physical-education',
-  'pe': 'physical-education',
-  'health': 'health',
-  'health-and-physical-education': 'physical-education',
-  
-  'religion': 'religion',
-  'buddhism': 'religion',
-  'christianity': 'religion',
-  'islam': 'religion',
-  'hinduism': 'religion',
-  
-  'commerce': 'commerce',
-  'accounting': 'commerce',
-  'business-studies': 'commerce',
-  
-  'agriculture': 'agriculture',
-  'agri': 'agriculture',
-  
-  'drama': 'drama',
-  'theatre': 'drama',
-  
-  'dance': 'dance',
-  
-  'western-music': 'western-music',
-  'eastern-music': 'eastern-music',
-};
-
 export function normalizeSubject(subject: string): string {
-  const normalized = subject.toLowerCase().trim().replace(/\s+/g, '-');
-  return SUBJECT_MAPPING[normalized] || normalized;
-}
-
-export function getValidSubjects(): string[] {
-  return Array.from(new Set(Object.values(SUBJECT_MAPPING)));
+  return subject
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[()]/g, '')
+    .replace(/[\/\\]/g, '-')
+    .replace(/[^\w-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 export function normalizeGrade(grade: string | number): string {
@@ -165,5 +113,9 @@ export function sanitizeFilename(filename: string): string {
     .replace(/\.\./g, '')
     .replace(/[<>:"|?*]/g, '')
     .trim();
+}
+
+export function normalizeMedium(medium: string): string {
+  return medium.toLowerCase().trim().replace(/\s+/g, '-');
 }
 

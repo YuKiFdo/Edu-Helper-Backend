@@ -36,15 +36,32 @@ export class UserController {
     return this.pdfDbService.getSubjectsByTypeAndGradeId(type, gradeId);
   }
 
-  @Get(':type/:grade/:subject/pdfs')
-  @ApiOperation({ summary: 'Get PDFs for Type Grade Subject', description: 'Get all PDFs of the given type for a specific grade (by ID) and subject (by ID)' })
+  @Get(':type/:grade/:subject/mediums')
+  @ApiOperation({ summary: 'Get Mediums for Type Grade Subject', description: 'Get all mediums that have PDFs for a specific grade (by ID) and subject (by ID)' })
   @ApiParam({ name: 'type', description: 'Type of PDF', enum: PdfType })
   @ApiParam({ name: 'grade', description: 'Grade ID (UUID)' })
   @ApiParam({ name: 'subject', description: 'Subject ID (UUID)' })
-  @ApiResponse({ status: 200, description: 'List of PDFs retrieved successfully' })
+  @ApiResponse({ status: 200, description: 'List of mediums retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Grade or Subject not found' })
-  async getPdfsForTypeGradeSubject(@Param('type') type: PdfType, @Param('grade') gradeId: string, @Param('subject') subjectId: string): Promise<StandardApiResponse> {
-    return this.pdfDbService.getPdfsByTypeGradeIdAndSubjectId(type, gradeId, subjectId);
+  async getMediumsForTypeGradeSubject(@Param('type') type: PdfType, @Param('grade') gradeId: string, @Param('subject') subjectId: string): Promise<StandardApiResponse> {
+    return this.pdfDbService.getMediumsByTypeGradeIdAndSubjectId(type, gradeId, subjectId);
+  }
+
+  @Get(':type/:grade/:subject/:medium/pdfs')
+  @ApiOperation({ summary: 'Get PDFs for Type Grade Subject Medium', description: 'Get all PDFs of the given type for a specific grade (by ID), subject (by ID), and medium (by ID). PDFs are read directly from storage folder.' })
+  @ApiParam({ name: 'type', description: 'Type of PDF', enum: PdfType })
+  @ApiParam({ name: 'grade', description: 'Grade ID (UUID)' })
+  @ApiParam({ name: 'subject', description: 'Subject ID (UUID)' })
+  @ApiParam({ name: 'medium', description: 'Medium ID (UUID)' })
+  @ApiResponse({ status: 200, description: 'List of PDFs retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Grade, Subject, or Medium not found' })
+  async getPdfsForTypeGradeSubjectMedium(
+    @Param('type') type: PdfType,
+    @Param('grade') gradeId: string,
+    @Param('subject') subjectId: string,
+    @Param('medium') mediumId: string,
+  ): Promise<StandardApiResponse> {
+    return this.pdfDbService.getPdfsByTypeGradeIdAndSubjectId(type, gradeId, subjectId, mediumId);
   }
 
 }

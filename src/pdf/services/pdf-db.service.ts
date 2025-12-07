@@ -3,13 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import { createReadStream, existsSync } from 'fs';
+import { createReadStream, existsSync, statSync } from 'fs';
 import { Grade } from '../entities/grade.entity';
 import { Subject } from '../entities/subject.entity';
+import { Medium } from '../entities/medium.entity';
 import { Pdf, PdfType } from '../entities/pdf.entity';
-import { normalizeGrade, normalizeSubject, PDF_STORAGE_PATH, PDF_TYPES, sanitizeFilename } from '../common/pdf.constants';
+import { normalizeGrade, normalizeSubject, normalizeMedium, PDF_STORAGE_PATH, PDF_TYPES, sanitizeFilename } from '../common/pdf.constants';
 import { CreateGradeDto } from '../dto/create-grade.dto';
 import { CreateSubjectDto } from '../dto/create-subject.dto';
+import { CreateMediumDto } from '../dto/create-medium.dto';
 import { StandardApiResponse } from '../common/response.interface';
 
 @Injectable()
@@ -19,9 +21,31 @@ export class PdfDbService {
     private gradeRepository: Repository<Grade>,
     @InjectRepository(Subject)
     private subjectRepository: Repository<Subject>,
+    @InjectRepository(Medium)
+    private mediumRepository: Repository<Medium>,
     @InjectRepository(Pdf)
     private pdfRepository: Repository<Pdf>,
-  ) {}
+  ) {
+    // Initialize default mediums on service creation
+    this.initializeDefaultMediums();
+  }
+
+  private async initializeDefaultMediums(): Promise<void> {
+    const defaultMediums = [
+      { name: 'Sinhala', normalizedName: 'sinhala' },
+      { name: 'English', normalizedName: 'english' },
+      { name: 'Tamil', normalizedName: 'tamil' },
+    ];
+
+    for (const medium of defaultMediums) {
+      const existing = await this.mediumRepository.findOne({
+        where: [{ name: medium.name }, { normalizedName: medium.normalizedName }],
+      });
+      if (!existing) {
+        await this.mediumRepository.save(this.mediumRepository.create(medium));
+      }
+    }
+  }
 
   async createGrade(dto: CreateGradeDto): Promise<Grade> {
     const normalizedName = normalizeGrade(dto.name);
@@ -162,6 +186,89 @@ export class PdfDbService {
     }
 
     await this.subjectRepository.remove(subject);
+  }
+
+  // Medium Management Methods
+  async createMedium(dto: CreateMediumDto): Promise<Medium> {
+    const normalizedName = normalizeMedium(dto.name);
+    
+    const existing = await this.mediumRepository.findOne({
+      where: [{ name: dto.name }, { normalizedName }],
+    });
+
+    if (existing) {
+      throw new BadRequestException(`Medium "${dto.name}" already exists`);
+    }
+
+    const medium = this.mediumRepository.create({
+      name: dto.name,
+      normalizedName,
+      description: dto.description,
+    });
+
+    return this.mediumRepository.save(medium);
+  }
+
+  async findMediumById(id: string): Promise<Medium> {
+    const medium = await this.mediumRepository.findOne({ where: { id } });
+    if (!medium) {
+      throw new NotFoundException(`Medium with ID ${id} not found`);
+    }
+    return medium;
+  }
+
+  async findMediumByName(name: string): Promise<Medium | null> {
+    const normalizedName = normalizeMedium(name);
+    return this.mediumRepository.findOne({
+      where: [{ name }, { normalizedName }],
+    });
+  }
+
+  async getAllMediums(): Promise<Medium[]> {
+    return this.mediumRepository.find({
+      order: { name: 'ASC' },
+    });
+  }
+
+  async deleteMedium(id: string): Promise<void> {
+    const medium = await this.findMediumById(id);
+    
+    // Check if medium has PDFs in storage
+    const hasPdfs = await this.checkMediumHasPdfs(medium.normalizedName);
+    if (hasPdfs) {
+      throw new BadRequestException(
+        'Cannot delete medium: it has PDF files in storage. Delete PDFs first.',
+      );
+    }
+
+    await this.mediumRepository.remove(medium);
+  }
+
+  private async checkMediumHasPdfs(normalizedName: string): Promise<boolean> {
+    for (const pdfType of Object.values(PDF_TYPES)) {
+      const typePath = join(PDF_STORAGE_PATH, pdfType);
+      if (!existsSync(typePath)) continue;
+
+      const gradeEntries = await fs.readdir(typePath, { withFileTypes: true });
+      for (const gradeEntry of gradeEntries) {
+        if (!gradeEntry.isDirectory()) continue;
+
+        const subjectPath = join(typePath, gradeEntry.name);
+        const subjectEntries = await fs.readdir(subjectPath, { withFileTypes: true });
+        for (const subjectEntry of subjectEntries) {
+          if (!subjectEntry.isDirectory()) continue;
+
+          const mediumPath = join(subjectPath, subjectEntry.name, normalizedName);
+          if (existsSync(mediumPath)) {
+            const files = await fs.readdir(mediumPath);
+            if (files.length > 0) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
   }
 
   async createPdf(data: {
@@ -580,6 +687,33 @@ export class PdfDbService {
     };
   }
 
+  async getPdfStreamByPath(filePath: string): Promise<{ stream: NodeJS.ReadableStream; size: number; filename: string }> {
+    // Security: Ensure the path is within the storage directory
+    // Remove any leading slashes and resolve the path
+    const cleanPath = filePath.replace(/^[\/\\]+/, '').replace(/\.\./g, '');
+    const fullPath = join(PDF_STORAGE_PATH, cleanPath);
+
+    // Double-check the resolved path is still within storage directory
+    const resolvedPath = join(PDF_STORAGE_PATH, cleanPath);
+    if (!resolvedPath.startsWith(join(PDF_STORAGE_PATH))) {
+      throw new BadRequestException('Invalid file path');
+    }
+
+    if (!existsSync(fullPath)) {
+      throw new NotFoundException(`PDF file not found at path: ${fullPath}`);
+    }
+
+    const stats = statSync(fullPath);
+    const stream = createReadStream(fullPath);
+    const filename = cleanPath.split(/[\/\\]/).pop() || 'document.pdf';
+
+    return {
+      stream,
+      size: stats.size,
+      filename,
+    };
+  }
+
   async getGradesByType(type: PdfType): Promise<StandardApiResponse<Grade>> {
     try {
       const gradeIdsFromPdfs = new Set<string>();
@@ -814,20 +948,79 @@ export class PdfDbService {
     type: PdfType,
     gradeId: string,
     subjectId: string,
-  ): Promise<StandardApiResponse<Pdf>> {
+    mediumId?: string,
+  ): Promise<StandardApiResponse<any>> {
     try {
       const gradeEntity = await this.findGradeById(gradeId);
       const subjectEntity = await this.findSubjectById(subjectId);
 
-      const pdfs = await this.pdfRepository.find({
-        where: {
-          type,
-          gradeId: gradeEntity.id,
-          subjectId: subjectEntity.id,
-        },
-        relations: ['grade', 'subject'],
-        order: { name: 'ASC' },
-      });
+      const normalizedGrade = gradeEntity.normalizedName;
+      const normalizedSubject = subjectEntity.normalizedName;
+      const basePath = join(PDF_STORAGE_PATH, type, normalizedGrade, normalizedSubject);
+
+      if (!existsSync(basePath)) {
+        return {
+          isSuccessfull: true,
+          Message: `No PDFs found for ${type} in grade "${gradeEntity.name}" and subject "${subjectEntity.name}"`,
+          listContent: [],
+        };
+      }
+
+      const pdfs: any[] = [];
+      const mediumEntries = await fs.readdir(basePath, { withFileTypes: true });
+
+      for (const mediumEntry of mediumEntries) {
+        if (!mediumEntry.isDirectory()) continue;
+
+        const mediumName = mediumEntry.name;
+        const mediumEntity = await this.findMediumByName(mediumName);
+
+        // If mediumId is provided, filter by it
+        if (mediumId && mediumEntity?.id !== mediumId) {
+          continue;
+        }
+
+        const mediumPath = join(basePath, mediumName);
+        const files = await fs.readdir(mediumPath);
+
+        for (const file of files) {
+          if (!file.toLowerCase().endsWith('.pdf')) continue;
+
+          const filePath = join(mediumPath, file);
+          const stats = statSync(filePath);
+
+          pdfs.push({
+            filename: file,
+            name: file.replace(/\.pdf$/i, '').replace(/^\d+-/, ''), // Remove timestamp prefix if exists
+            filePath,
+            type,
+            fileSize: stats.size,
+            mimeType: 'application/pdf',
+            grade: {
+              id: gradeEntity.id,
+              name: gradeEntity.name,
+              normalizedName: gradeEntity.normalizedName,
+            },
+            subject: {
+              id: subjectEntity.id,
+              name: subjectEntity.name,
+              normalizedName: subjectEntity.normalizedName,
+            },
+            medium: mediumEntity ? {
+              id: mediumEntity.id,
+              name: mediumEntity.name,
+              normalizedName: mediumEntity.normalizedName,
+            } : {
+              name: mediumName,
+              normalizedName: mediumName,
+            },
+            createdAt: stats.birthtime,
+            updatedAt: stats.mtime,
+          });
+        }
+      }
+
+      pdfs.sort((a, b) => a.name.localeCompare(b.name));
 
       return {
         isSuccessfull: true,
@@ -838,6 +1031,76 @@ export class PdfDbService {
       return {
         isSuccessfull: false,
         Message: `Failed to get PDFs: ${error.message}`,
+      };
+    }
+  }
+
+  async getMediumsByTypeGradeIdAndSubjectId(
+    type: PdfType,
+    gradeId: string,
+    subjectId: string,
+  ): Promise<StandardApiResponse<Medium>> {
+    try {
+      const gradeEntity = await this.findGradeById(gradeId);
+      const subjectEntity = await this.findSubjectById(subjectId);
+
+      const normalizedGrade = gradeEntity.normalizedName;
+      const normalizedSubject = subjectEntity.normalizedName;
+      const basePath = join(PDF_STORAGE_PATH, type, normalizedGrade, normalizedSubject);
+
+      if (!existsSync(basePath)) {
+        return {
+          isSuccessfull: true,
+          Message: `No mediums found for ${type} in grade "${gradeEntity.name}" and subject "${subjectEntity.name}"`,
+          listContent: [],
+        };
+      }
+
+      const mediumNames = new Set<string>();
+      const mediumEntries = await fs.readdir(basePath, { withFileTypes: true });
+
+      for (const mediumEntry of mediumEntries) {
+        if (!mediumEntry.isDirectory()) continue;
+        
+        const mediumPath = join(basePath, mediumEntry.name);
+        const files = await fs.readdir(mediumPath);
+        const hasPdfs = files.some(f => f.toLowerCase().endsWith('.pdf'));
+        
+        if (hasPdfs) {
+          mediumNames.add(mediumEntry.name);
+        }
+      }
+
+      const mediums: Medium[] = [];
+      for (const mediumName of mediumNames) {
+        const medium = await this.findMediumByName(mediumName);
+        if (medium) {
+          mediums.push(medium);
+        } else {
+          // Create a temporary medium object for mediums that exist in storage but not in DB
+          const tempMedium = this.mediumRepository.create({
+            name: mediumName,
+            normalizedName: mediumName,
+            description: undefined,
+          });
+          tempMedium.id = '';
+          tempMedium.createdAt = new Date();
+          tempMedium.updatedAt = new Date();
+          mediums.push(tempMedium);
+        }
+      }
+
+      mediums.sort((a, b) => a.name.localeCompare(b.name));
+
+      return {
+        isSuccessfull: true,
+        Message: `Found ${mediums.length} medium(s) for ${type} in grade "${gradeEntity.name}" and subject "${subjectEntity.name}"`,
+        listContent: mediums,
+      };
+    } catch (error: any) {
+      return {
+        isSuccessfull: false,
+        Message: `Failed to get mediums: ${error.message}`,
       };
     }
   }

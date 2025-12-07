@@ -6,10 +6,11 @@ import { AdminController } from './controllers/admin.controller';
 import { PdfDbService } from './services/pdf-db.service';
 import { Grade } from './entities/grade.entity';
 import { Subject } from './entities/subject.entity';
+import { Medium } from './entities/medium.entity';
 import { Pdf } from './entities/pdf.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Grade, Subject, Pdf])],
+  imports: [TypeOrmModule.forFeature([Grade, Subject, Medium, Pdf])],
   controllers: [
     PdfController,
     UserController,
