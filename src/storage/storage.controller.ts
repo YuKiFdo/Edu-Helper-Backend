@@ -68,13 +68,13 @@ export class StorageController {
     @ApiParam({ name: 'type', description: 'Content type', example: 'pastpapers' })
     @ApiParam({ name: 'grade', description: 'Grade level', example: 'grade-01' })
     @ApiParam({ name: 'subject', description: 'Subject name', example: 'mathematics' })
-    @ApiParam({ name: 'language', description: 'Language', enum: Language, example: 'english' })
+    @ApiParam({ name: 'language', description: 'Language', example: 'english' })
     @ApiResponse({ status: 200, description: 'List of PDFs' })
     async getPdfs(
         @Param('type') type: string,
         @Param('grade') grade: string,
         @Param('subject') subject: string,
-        @Param('language') language: Language,
+        @Param('language') language: string,
     ): Promise<StandardApiResponse> {
         return this.storageService.getPdfs(type, grade, subject, language);
     }
@@ -119,7 +119,7 @@ export class StorageController {
                 type: { type: 'string', example: 'pastpapers' },
                 grade: { type: 'string', example: 'grade-01' },
                 subject: { type: 'string', example: 'mathematics' },
-                language: { type: 'string', enum: ['sinhala', 'tamil', 'english'], example: 'english' },
+                language: { type: 'string', example: 'english' },
                 file: { type: 'string', format: 'binary' },
             },
             required: ['type', 'grade', 'subject', 'language', 'file'],
@@ -160,14 +160,14 @@ export class StorageController {
     @ApiParam({ name: 'type', description: 'Content type', example: 'pastpapers' })
     @ApiParam({ name: 'grade', description: 'Grade level', example: 'grade-01' })
     @ApiParam({ name: 'subject', description: 'Subject name', example: 'mathematics' })
-    @ApiParam({ name: 'language', description: 'Language', enum: Language, example: 'english' })
+    @ApiParam({ name: 'language', description: 'Language', example: 'english' })
     @ApiParam({ name: 'filename', description: 'PDF filename', example: 'paper1.pdf' })
     @ApiResponse({ status: 200, description: 'PDF deleted successfully' })
     async deletePdf(
         @Param('type') type: string,
         @Param('grade') grade: string,
         @Param('subject') subject: string,
-        @Param('language') language: Language,
+        @Param('language') language: string,
         @Param('filename') filename: string,
     ): Promise<StandardApiResponse> {
         await this.storageService.deletePdf(type, grade, subject, language, filename);

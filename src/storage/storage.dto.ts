@@ -24,15 +24,11 @@ export class UploadPdfDto {
     type: string;
 
     @ApiProperty({
-        description: 'Grade level (grade-01 to grade-13-al)',
+        description: 'Grade level (e.g., grade-01, grade-10, A-Level, etc.)',
         example: 'grade-01',
-        pattern: '^grade-(0[1-9]|1[0-3](-al)?)$',
     })
     @IsString()
     @IsNotEmpty()
-    @Matches(/^grade-(0[1-9]|1[0-3](-al)?)$/, {
-        message: 'Grade must be between grade-01 and grade-13-al',
-    })
     grade: string;
 
     @ApiProperty({
@@ -44,12 +40,12 @@ export class UploadPdfDto {
     subject: string;
 
     @ApiProperty({
-        description: 'Language of the PDF',
-        enum: Language,
+        description: 'Language of the PDF (e.g., sinhala, tamil, english, french, etc.)',
         example: 'english',
     })
-    @IsEnum(Language)
-    language: Language;
+    @IsString()
+    @IsNotEmpty()
+    language: string;
 }
 
 export class PdfItemDto {

@@ -8,12 +8,6 @@ import { createReadStream } from 'fs';
 @Injectable()
 export class StorageService {
     private readonly storageRoot: string;
-    private readonly validGrades = [
-        'grade-01', 'grade-02', 'grade-03', 'grade-04', 'grade-05',
-        'grade-06', 'grade-07', 'grade-08', 'grade-09', 'grade-10',
-        'grade-11', 'grade-12', 'grade-13', 'grade-13-al'
-    ];
-    private readonly validLanguages = Object.values(Language);
 
     constructor(private configService: ConfigService) {
         this.storageRoot = path.join(process.cwd(), 'storage');
@@ -49,7 +43,7 @@ export class StorageService {
         const folders: FolderItemDto[] = [];
 
         for (const item of items) {
-            if (item.isDirectory() && this.validGrades.includes(item.name)) {
+            if (item.isDirectory()) {
                 const itemCount = await this.countItems(path.join(typePath, item.name));
                 folders.push({
                     name: item.name,
@@ -66,7 +60,6 @@ export class StorageService {
     }
 
     async getSubjectsByGrade(type: string, grade: string): Promise<StandardApiResponse> {
-        this.validateGrade(grade);
         const gradePath = path.join(this.storageRoot, type, grade);
         await this.ensureFolderExists(gradePath);
 
@@ -92,7 +85,6 @@ export class StorageService {
 
 
     async getLanguagesBySubject(type: string, grade: string, subject: string): Promise<StandardApiResponse> {
-        this.validateGrade(grade);
         const subjectPath = path.join(this.storageRoot, type, grade, subject);
         await this.ensureFolderExists(subjectPath);
 
@@ -100,7 +92,7 @@ export class StorageService {
         const folders: FolderItemDto[] = [];
 
         for (const item of items) {
-            if (item.isDirectory() && this.validLanguages.includes(item.name as Language)) {
+            if (item.isDirectory()) {
                 const itemCount = await this.countItems(path.join(subjectPath, item.name));
                 folders.push({
                     name: item.name,
@@ -119,9 +111,7 @@ export class StorageService {
     /**
      * Get all PDFs for a specific path
      */
-    async getPdfs(type: string, grade: string, subject: string, language: Language): Promise<StandardApiResponse> {
-        this.validateGrade(grade);
-        this.validateLanguage(language);
+    async getPdfs(type: string, grade: string, subject: string, language: string): Promise<StandardApiResponse> {
 
         const pdfPath = path.join(this.storageRoot, type, grade, subject, language);
         await this.ensureFolderExists(pdfPath);
@@ -155,12 +145,10 @@ export class StorageService {
         type: string,
         grade: string,
         subject: string,
-        language: Language,
+        language: string,
         filename: string,
         buffer: Buffer,
     ): Promise<string> {
-        this.validateGrade(grade);
-        this.validateLanguage(language);
 
         // Sanitize filename
         const sanitizedFilename = this.sanitizeFilename(filename);
@@ -192,9 +180,7 @@ export class StorageService {
     /**
      * Delete a PDF file
      */
-    async deletePdf(type: string, grade: string, subject: string, language: Language, filename: string): Promise<void> {
-        this.validateGrade(grade);
-        this.validateLanguage(language);
+    async deletePdf(type: string, grade: string, subject: string, language: string, filename: string): Promise<void> {
 
         const filePath = path.join(this.storageRoot, type, grade, subject, language, filename);
 
@@ -279,17 +265,7 @@ export class StorageService {
         }
     }
 
-    private validateGrade(grade: string): void {
-        if (!this.validGrades.includes(grade)) {
-            throw new BadRequestException(`Invalid grade. Must be between grade-01 and grade-13-al`);
-        }
-    }
 
-    private validateLanguage(language: Language): void {
-        if (!this.validLanguages.includes(language)) {
-            throw new BadRequestException(`Invalid language. Must be one of: ${this.validLanguages.join(', ')}`);
-        }
-    }
 
     private sanitizeFilename(filename: string): string {
         // Remove any path traversal attempts and dangerous characters
