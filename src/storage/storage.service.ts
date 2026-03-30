@@ -59,7 +59,7 @@ export class StorageService {
         };
     }
 
-    async getSubjectsByGrade(type: string, grade: string): Promise<StandardApiResponse> {
+    async getSubjectsByGrade(type: string, grade: string, medium?: string): Promise<StandardApiResponse> {
         const gradePath = path.join(this.storageRoot, type, grade);
         await this.ensureFolderExists(gradePath);
 
@@ -68,11 +68,33 @@ export class StorageService {
 
         for (const item of items) {
             if (item.isDirectory()) {
-                const itemCount = await this.countItems(path.join(gradePath, item.name));
-                folders.push({
-                    name: item.name,
-                    itemCount,
-                });
+                const subjectName = item.name;
+
+                if (medium) {
+                    const mediumPath = path.join(gradePath, subjectName, medium);
+                    try {
+                        const mediumStats = await fs.stat(mediumPath);
+                        if (mediumStats.isDirectory()) {
+                            const mediumItems = await fs.readdir(mediumPath, { withFileTypes: true });
+                            const pdfCount = mediumItems.filter(f => f.isFile() && f.name.toLowerCase().endsWith('.pdf')).length;
+
+                            if (pdfCount > 0) {
+                                folders.push({
+                                    name: subjectName,
+                                    itemCount: pdfCount,
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        // Directory for this medium does not exist under this subject, ignore
+                    }
+                } else {
+                    const itemCount = await this.countItems(path.join(gradePath, subjectName));
+                    folders.push({
+                        name: subjectName,
+                        itemCount,
+                    });
+                }
             }
         }
 

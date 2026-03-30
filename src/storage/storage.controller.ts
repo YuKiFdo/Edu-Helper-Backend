@@ -41,12 +41,14 @@ export class StorageController {
     @ApiOperation({ summary: 'Get all subjects for a specific type and grade' })
     @ApiParam({ name: 'type', description: 'Content type', example: 'pastpapers' })
     @ApiParam({ name: 'grade', description: 'Grade level', example: 'grade-01' })
+    @ApiQuery({ name: 'medium', description: 'Optional medium (language) filter. If provided, returns only subjects that have papers in this medium.', required: false, example: 'sinhala' })
     @ApiResponse({ status: 200, description: 'List of subjects' })
     async getSubjects(
         @Param('type') type: string,
         @Param('grade') grade: string,
+        @Query('medium') medium?: string,
     ): Promise<StandardApiResponse> {
-        return this.storageService.getSubjectsByGrade(type, grade);
+        return this.storageService.getSubjectsByGrade(type, grade, medium);
     }
 
     @Get(':type/:grade/:subject/languages')
